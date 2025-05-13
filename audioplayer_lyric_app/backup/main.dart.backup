@@ -1,0 +1,166 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'audio_state_provider.dart';
+import 'package:flutter_lyric/lyrics_reader.dart';
+import 'setting_component.dart';
+import 'const.dart';
+import 'audio_control.dart';
+import 'lyrics_reader_widget.dart';
+
+void main() {
+  runApp(
+    MaterialApp(
+      home: ChangeNotifierProvider(
+        create: (context) => AudioStateProvider(),
+        child: const MyApp(),
+      ),
+      debugShowCheckedModeBanner: false,
+    ),
+  );
+}
+
+class MyApp extends StatefulWidget {
+  const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with SingleTickerProviderStateMixin {
+  bool useEnhancedLrc = false;
+  var lyricModel =
+      LyricsModelBuilder.create()
+          .bindLyricToMain(normalLyric)
+          .bindLyricToExt(transLyric)
+          .getModel();
+  var lyricUI = UINetease();
+  late AnimationController _animationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Initialize audio after the widget is fully built and has context
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeAudio();
+    });
+  }
+
+  void _initializeAudio() {
+    final audioState = Provider.of<AudioStateProvider>(context, listen: false);
+    audioState.setAudioUrl(
+      'http://localhost:5244/d/music/%E5%BC%A0%E8%8A%B8%E4%BA%AC/%E7%A0%B4%E5%A4%A9%E8%8D%92/%E5%81%8F%E7%88%B1.flac?sign=hITOYOGwDr0e18tdL7N880vh891L7kQfHpjpPIfE20o=:0',
+    );
+  }
+
+  void showSettings(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(1, 0),
+            end: Offset.zero,
+          ).animate(
+            CurvedAnimation(
+              parent: _animationController,
+              curve: Curves.easeInOut,
+            ),
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(16.0),
+            height: MediaQuery.of(context).size.height * 0.8,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16.0),
+                topRight: Radius.circular(16.0),
+              ),
+              boxShadow: [
+                BoxShadow(blurRadius: 10.0, color: Colors.black.withAlpha(100)),
+              ],
+            ),
+            child: SettingComponent(
+              lyricUI: lyricUI,
+              onLyricUIChange: (updatedUI) {
+                setState(() {
+                  lyricUI = updatedUI;
+                });
+              },
+              lyricsModel: lyricModel,
+              onLyricModelChange: (updatedModel) {
+                setState(() {
+                  lyricModel = updatedModel;
+                });
+              },
+              useEnhancedLrc: useEnhancedLrc,
+              onUseEnhancedLrcChange: (value) {
+                setState(() {
+                  useEnhancedLrc = value;
+                });
+              },
+            ),
+          ),
+        );
+      },
+    ).whenComplete(() {
+      _animationController.reset();
+    });
+
+    _animationController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final audioState = Provider.of<AudioStateProvider>(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Music Player'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () => showSettings(context),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                LyricsReaderWidget(
+                  model: lyricModel,
+                  position: audioState.progress.toInt(),
+                  lyricUi: lyricUI,
+                  playing: audioState.isPlaying,
+                  noLyricsTextStyle: TextStyle(
+                    color: Color.fromARGB(111, 111, 111, 111),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const AudioControl(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
